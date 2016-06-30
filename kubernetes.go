@@ -28,11 +28,11 @@ func newKubeClient(kubeAPI string) (*kclient.Client, error) {
 	config = &restclient.Config{
 		Host:          kubeAPI,
 		ContentConfig: restclient.ContentConfig{GroupVersion: &unversioned.GroupVersion{Version: "v1"}},
+                Insecure:      true,
 	}
-
 	glog.Infof("Using %s for kubernetes master", config.Host)
 	glog.Infof("Using kubernetes API %v", config.GroupVersion)
-	return kclient.New(config)
+	return kclient.NewInCluster()
 }
 
 func (k2c *kube2consul) handleEndpointUpdate(obj interface{}) {
