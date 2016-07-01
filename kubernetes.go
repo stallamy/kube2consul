@@ -20,7 +20,11 @@ func createEndpointsLW(kubeClient *kclient.Client) *kcache.ListWatch {
 	return kcache.NewListWatchFromClient(kubeClient, "endpoints", kapi.NamespaceAll, kselector.Everything())
 }
 
-func newKubeClient(kubeAPI string) (*kclient.Client, error) {
+func newKubeClient(kubeAPI string,kubeInsecure bool) (*kclient.Client, error) {
+    if (kubeAPI == "") {
+        return kclient.NewInCluster()
+    }
+
 	var (
 		config *restclient.Config
 	)
@@ -28,11 +32,12 @@ func newKubeClient(kubeAPI string) (*kclient.Client, error) {
 	config = &restclient.Config{
 		Host:          kubeAPI,
 		ContentConfig: restclient.ContentConfig{GroupVersion: &unversioned.GroupVersion{Version: "v1"}},
-                Insecure:      true,
+        Insecure:      kubeInsecure,
 	}
+
 	glog.Infof("Using %s for kubernetes master", config.Host)
 	glog.Infof("Using kubernetes API %v", config.GroupVersion)
-	return kclient.NewInCluster()
+	return kclient.New(config)
 }
 
 func (k2c *kube2consul) handleEndpointUpdate(obj interface{}) {
