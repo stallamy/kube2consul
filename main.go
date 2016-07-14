@@ -32,6 +32,7 @@ type kube2consul struct {
 
 type cliOpts struct {
 	kubeAPI      string
+	kubeToken    string
 	consulAPI    string
 	consulToken  string
 	resyncPeriod int
@@ -44,6 +45,7 @@ func init() {
 	flag.IntVar(&opts.resyncPeriod, "resync-period", 30, "Resynchronization period in second")
 	flag.StringVar(&opts.kubeAPI, "kubernetes-api", "", "Kubernetes API URL")
 	flag.BoolVar(&opts.kubeInsecure, "kubernetes-insecure", false, "Ignore HTTPS certificate warnings")
+	flag.StringVar(&opts.kubeToken, "kubernetes-token", "", "Kubernetes API token")
 	flag.StringVar(&opts.consulAPI, "consul-api", "127.0.0.1:8500", "Consul API URL")
 	flag.StringVar(&opts.consulToken, "consul-token", "", "Consul API token")
 }
@@ -100,7 +102,7 @@ func main() {
 	}
 
 	// create kubernetes client
-	kubeClient, err := newKubeClient(opts.kubeAPI, opts.kubeInsecure)
+	kubeClient, err := newKubeClient(opts.kubeAPI, opts.kubeInsecure, opts.kubeToken)
 	if err != nil {
 		glog.Fatalf("Failed to create a kubernetes client: %v", err)
 	}
