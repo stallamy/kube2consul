@@ -20,6 +20,11 @@ func createEndpointsLW(kubeClient *kclient.Client) *kcache.ListWatch {
 	return kcache.NewListWatchFromClient(kubeClient, "endpoints", kapi.NamespaceAll, kselector.Everything())
 }
 
+// Returns a cache.ListWatch that gets all changes to pods.
+func createEndpointsPOD(kubeClient *kclient.Client) *kcache.ListWatch {
+	return kcache.NewListWatchFromClient(kubeClient, "pods", "cargo", kselector.Everything())
+}
+
 func newKubeClient(kubeAPI string,kubeInsecure bool,kubeToken string) (*kclient.Client, error) {
     if (kubeAPI == "") {
         return kclient.NewInCluster()
@@ -47,6 +52,12 @@ func (k2c *kube2consul) handleEndpointUpdate(obj interface{}) {
 	}
 }
 
+func (k2c *kube2consul) handlePodUpdate(obj interface{}) {
+	if p, ok := obj.(*kapi.Pod); ok {
+	    k2c.registerPod(p)
+	}
+}
+
 func (k2c *kube2consul) watchEndpoints(kubeClient *kclient.Client) kcache.Store {
 	eStore, eController := kframework.NewInformer(
 		createEndpointsLW(kubeClient),
@@ -58,6 +69,25 @@ func (k2c *kube2consul) watchEndpoints(kubeClient *kclient.Client) kcache.Store 
 			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				go k2c.handleEndpointUpdate(newObj)
+			},
+		},
+	)
+
+	go eController.Run(wait.NeverStop)
+	return eStore
+}
+
+func (k2c *kube2consul) watchPods(kubeClient *kclient.Client) kcache.Store {
+	eStore, eController := kframework.NewInformer(
+		createEndpointsPOD(kubeClient),
+		&kapi.Pod{},
+		time.Duration(opts.resyncPeriod)*time.Second,
+		kframework.ResourceEventHandlerFuncs{
+			AddFunc: func(newObj interface{}) {
+				go k2c.handlePodUpdate(newObj)
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				go k2c.handlePodUpdate(newObj)
 			},
 		},
 	)

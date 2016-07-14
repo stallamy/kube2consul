@@ -28,6 +28,9 @@ const (
 type kube2consul struct {
 	consulCatalog  *consulapi.Catalog
 	endpointsStore kcache.Store
+	podsStore kcache.Store
+	pending map[string]Endpoint
+	lock sync.RWMutex
 }
 
 type cliOpts struct {
@@ -109,8 +112,11 @@ func main() {
 
 	k2c := kube2consul{
 		consulCatalog: consulClient.Catalog(),
+		pending: make(map[string]Endpoint),
+		lock: sync.RWMutex{},
 	}
 
+    k2c.podsStore = k2c.watchPods(kubeClient)
 	k2c.endpointsStore = k2c.watchEndpoints(kubeClient)
 
 	wg.Add(1)

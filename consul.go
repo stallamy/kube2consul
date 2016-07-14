@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/golang/glog"
 	consulapi "github.com/hashicorp/consul/api"
+	kapi "k8s.io/kubernetes/pkg/api"
 )
 
 func newConsulClient(consulAPI, consulToken string) (*consulapi.Client, error) {
@@ -13,29 +14,78 @@ func newConsulClient(consulAPI, consulToken string) (*consulapi.Client, error) {
 	return consulapi.NewClient(config)
 }
 
+func (k2c *kube2consul) addPending(e Endpoint) {
+    k2c.lock.Lock()
+    defer k2c.lock.Unlock()
+    k2c.pending[e.RefName] = e
+}
+
+func (k2c *kube2consul) removePending(e Endpoint) {
+    k2c.lock.Lock()
+    defer k2c.lock.Unlock()
+    delete(k2c.pending, e.RefName)
+}
+
+func (k2c *kube2consul) registerPod(p *kapi.Pod) {
+	if p.ObjectMeta.Name == "" {
+		return
+	}
+
+    e, exists := k2c.pending[p.ObjectMeta.Name]
+    if (exists) {
+        k2c.registerEndpointPod(e,p)
+        k2c.removePending(e)
+    }
+}
+
 func (k2c *kube2consul) registerEndpoint(e Endpoint) {
 	if e.RefName == "" {
 		return
 	}
 
-	service := &consulapi.AgentService{
-		Service: e.Name,
-		Port:    int(e.Port),
-		Tags:    []string{consulTag},
-	}
+	var (
+        item interface{}
+        exists bool
+    )
 
-	reg := &consulapi.CatalogRegistration{
-		Node:    e.RefName,
-		Address: e.Address,
-		Service: service,
-	}
-
-	_, err := k2c.consulCatalog.Register(reg, nil)
-	if err != nil {
-		glog.Errorf("Error registrating service %v (%v, %v): %v", e.Name, e.RefName, e.Address, err)
+    item, exists, _ = k2c.podsStore.GetByKey(e.RefName);
+	if (exists) {
+	    if p, ok := item.(*kapi.Pod); ok {
+            k2c.registerEndpointPod(e,p)
+        }
 	} else {
-		glog.V(1).Infof("Update service %v (%v, %v)", e.Name, e.RefName, e.Address)
+	    k2c.addPending(e) // sometimes we see the Endpoint notification before we see the Pod definition
 	}
+}
+
+func (k2c *kube2consul) registerEndpointPod(e Endpoint, p *kapi.Pod) {
+    var (
+        err error
+        tags []string
+    )
+    tags = append(tags, consulTag)
+    if (len(p.Annotations["tags"]) > 0) {
+        tags = append(tags, p.Annotations["tags"])
+    }
+
+    service := &consulapi.AgentService{
+        Service: e.Name,
+        Port:    int(e.Port),
+        Tags:    tags,
+    }
+
+    reg := &consulapi.CatalogRegistration{
+        Node:    e.RefName,
+        Address: e.Address,
+        Service: service,
+    }
+
+    _, err = k2c.consulCatalog.Register(reg, nil)
+    if err != nil {
+        glog.Errorf("Error registrating service %v (%v, %v): %v", e.Name, e.RefName, e.Address, err)
+    } else {
+        glog.V(1).Infof("Update service %v (%v, %v)", e.Name, e.RefName, e.Address)
+    }
 }
 
 func endpointExists(refName, address string, port int, endpoints []Endpoint) bool {
