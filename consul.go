@@ -48,7 +48,7 @@ func (k2c *kube2consul) registerEndpoint(e Endpoint) {
         exists bool
     )
 
-    item, exists, _ = k2c.podsStore.GetByKey(e.RefName);
+    item, exists, _ = k2c.podsStore.GetByKey(e.RefName)
 	if (exists) {
 	    if p, ok := item.(*kapi.Pod); ok {
             k2c.registerEndpointPod(e,p)
@@ -84,7 +84,7 @@ func (k2c *kube2consul) registerEndpointPod(e Endpoint, p *kapi.Pod) {
     if err != nil {
         glog.Errorf("Error registrating service %v (%v, %v): %v", e.Name, e.RefName, e.Address, err)
     } else {
-        glog.V(1).Infof("Update service %v (%v, %v)", e.Name, e.RefName, e.Address)
+        glog.Infof("Update service %v (%v, %v)", e.Name, e.RefName, e.Address)
     }
 }
 
