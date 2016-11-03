@@ -34,18 +34,22 @@ type kube2consul struct {
 }
 
 type cliOpts struct {
-	kubeAPI      string
-	kubeToken    string
-	consulAPI    string
-	consulToken  string
-	resyncPeriod int
-	version      bool
-	kubeInsecure bool
+	kubeAPI            string
+	kubeToken          string
+	consulAPI          string
+	consulToken        string
+	resyncPeriod       int
+	maxConnectAttempts int
+	retryDelay         int
+	version            bool
+	kubeInsecure       bool
 }
 
 func init() {
 	flag.BoolVar(&opts.version, "version", false, "Prints kube2consul version")
 	flag.IntVar(&opts.resyncPeriod, "resync-period", 30, "Resynchronization period in second")
+	flag.IntVar(&opts.maxConnectAttempts, "max-connect-attempts", 12, "Max numbers of attempts to connect to Consul")
+	flag.IntVar(&opts.retryDelay, "retry-delay", 5, "Delay in seconds between Consul connection attempts")
 	flag.StringVar(&opts.kubeAPI, "kubernetes-api", "", "Kubernetes API URL")
 	flag.BoolVar(&opts.kubeInsecure, "kubernetes-insecure", false, "Ignore HTTPS certificate warnings")
 	flag.StringVar(&opts.kubeToken, "kubernetes-token", "", "Kubernetes API token")
@@ -102,12 +106,34 @@ func main() {
 	consulClient, err := newConsulClient(opts.consulAPI, opts.consulToken)
 	if err != nil {
 		glog.Fatalf("Failed to create a consul client: %v", err)
+		os.Exit(1)
 	}
+
+	// ensure consul is up
+	for attempt := 1; attempt <= opts.maxConnectAttempts; attempt++ {
+        if _, err = consulClient.Agent().Self(); err == nil {
+            break
+        }
+
+        if attempt == opts.maxConnectAttempts {
+            break
+        }
+
+        glog.Infof("[Attempt: %d] Attempting access to Consul after %d second sleep", attempt, opts.retryDelay)
+        time.Sleep(time.Duration(opts.retryDelay) * time.Second)
+    }
+
+    if err != nil {
+        glog.Fatalf("Failed to connect to Consul: %v", err)
+        os.Exit(1)
+    }
+
 
 	// create kubernetes client
 	kubeClient, err := newKubeClient(opts.kubeAPI, opts.kubeInsecure, opts.kubeToken)
 	if err != nil {
 		glog.Fatalf("Failed to create a kubernetes client: %v", err)
+		os.Exit(1)
 	}
 
 	k2c := kube2consul{
