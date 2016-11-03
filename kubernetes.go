@@ -22,7 +22,7 @@ func createEndpointsLW(kubeClient *kclient.Client) *kcache.ListWatch {
 
 // Returns a cache.ListWatch that gets all changes to pods.
 func createEndpointsPOD(kubeClient *kclient.Client) *kcache.ListWatch {
-	return kcache.NewListWatchFromClient(kubeClient, "pods", "cargo", kselector.Everything())
+	return kcache.NewListWatchFromClient(kubeClient, "pods", kapi.NamespaceAll, kselector.Everything())
 }
 
 func newKubeClient(kubeAPI string,kubeInsecure bool,kubeToken string) (*kclient.Client, error) {
